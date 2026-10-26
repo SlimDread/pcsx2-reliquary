@@ -1722,13 +1722,16 @@ __fi void cdvdReadInterrupt()
 
 	if (cdvd.Reading)
 	{
-		if (cdvd.ReadErr == 0)
+		if (cdvd.ReadErr == 0 || cdvd.ReadErr == -2)
 		{
-			while ((cdvd.ReadErr = DoCDVDgetBuffer(&cdr.Transfer[0])), cdvd.ReadErr == -2)
+			cdvd.ReadErr = DoCDVDgetBuffer(&cdr.Transfer[0]);
+			if (cdvd.ReadErr == -2)
 			{
-				// not finished yet ... block on the read until it finishes.
-				Threading::Sleep(0);
-				Threading::SpinWait();
+				// Host read not finished yet. Rather than freezing the emulator until it lands,
+				// keep the drive busy and check again a sector-time later, the way a real drive
+				// keeps the console running while it waits on the disc. Needs proper testing across games.
+				CDVDREAD_INT(cdvd.ReadTime);
+				return;
 			}
 		}
 
