@@ -561,21 +561,24 @@ void cdrReadInterrupt()
 
 	CDVD_LOG("KEY END");
 
+	if (cdr.RErr == 0 || cdr.RErr == -2)
+	{
+		cdr.RErr = DoCDVDgetBuffer(cdr.Transfer);
+		if (cdr.RErr == -2)
+		{
+			// Host drive hasn't delivered the sector yet. Instead of freezing the emulator until it does,
+			// check again a sector-time later and let the console keep running, like real hardware.
+			// Needs proper testing across PS1 games.
+			CDREAD_INT((cdr.Mode & 0x80) ? (cdReadTime / 2) : cdReadTime);
+			return;
+		}
+	}
+
 	cdr.OCUP = 1;
 	SetResultSize(1);
 	cdr.StatP &= ~STATUS_SEEK;
 	cdr.StatP |= STATUS_READ;
 	cdr.Result[0] = cdr.StatP;
-
-	if (cdr.RErr == 0)
-	{
-		while ((cdr.RErr = DoCDVDgetBuffer(cdr.Transfer)), cdr.RErr == -2)
-		{
-			// not finished yet ... block on the read until it finishes.
-			Threading::Sleep(0);
-			Threading::SpinWait();
-		}
-	}
 
 	if (cdr.RErr == -1)
 	{
