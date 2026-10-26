@@ -259,7 +259,20 @@ static s32 DISCgetBuffer(u8* dest)
 		return 0;
 	}
 
-	memcpy(dest, cdvdGetSector(csector, cmode), csize);
+	// Don't read the drive on the emulation thread: if the IO thread hasn't fetched the block yet,
+	// report "not ready" so the emulated drive stays busy while the console keeps running.
+	bool failed;
+	u8* data = cdvdTryGetSector(csector, cmode, failed);
+	if (!data)
+	{
+		if (!failed)
+			return -2;
+
+		// The IO thread's read failed; retry synchronously like before so error behavior is unchanged.
+		data = cdvdGetSector(csector, cmode);
+	}
+
+	memcpy(dest, data, csize);
 
 	return 0;
 }
