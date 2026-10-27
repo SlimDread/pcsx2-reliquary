@@ -167,46 +167,31 @@ bool IOCtlSrc::ReadSectors2352(u32 sector, u32 count, u8* buffer) const
 	sptd.info.SenseInfoOffset = offsetof(sptdinfo, sense_buffer);
 	sptd.info.TimeOutValue = 5;
 
-	const auto read_range = [&](u32 first_sector, u32 n, u8* dest, bool report) -> bool {
-		sptd.info.Cdb[2] = (first_sector >> 24) & 0xFF;
-		sptd.info.Cdb[3] = (first_sector >> 16) & 0xFF;
-		sptd.info.Cdb[4] = (first_sector >> 8) & 0xFF;
-		sptd.info.Cdb[5] = first_sector & 0xFF;
-		sptd.info.Cdb[6] = (n >> 16) & 0xFF;
-		sptd.info.Cdb[7] = (n >> 8) & 0xFF;
-		sptd.info.Cdb[8] = n & 0xFF;
-		sptd.info.DataTransferLength = 2352 * n;
-		sptd.info.DataBuffer = dest;
+	// Read sectors one by one to avoid reading data from 2 tracks of different
+	// types in the same read (which will fail).
+	for (u32 n = 0; n < count; ++n)
+	{
+		u32 current_sector = sector + n;
+		sptd.info.Cdb[2] = (current_sector >> 24) & 0xFF;
+		sptd.info.Cdb[3] = (current_sector >> 16) & 0xFF;
+		sptd.info.Cdb[4] = (current_sector >> 8) & 0xFF;
+		sptd.info.Cdb[5] = current_sector & 0xFF;
+		sptd.info.DataTransferLength = 2352;
+		sptd.info.DataBuffer = buffer + 2352 * n;
 		sptd.info.SenseInfoLength = sizeof(sptd.sense_buffer);
 
 		DWORD unused;
 		if (DeviceIoControl(m_device, IOCTL_SCSI_PASS_THROUGH_DIRECT, &sptd,
 							sizeof(sptd), &sptd, sizeof(sptd), &unused, nullptr))
 		{
-			if (sptd.info.DataTransferLength == 2352 * n)
-				return true;
+			if (sptd.info.DataTransferLength == 2352)
+				continue;
 		}
-		if (report)
-		{
-			printf(" * CDVD: SPTI failed reading sector %u; SENSE %u -", first_sector, sptd.info.SenseInfoLength);
-			for (const auto& c : sptd.sense_buffer)
-				printf(" %02X", c);
-			putchar('\n');
-		}
+		printf(" * CDVD: SPTI failed reading sector %u; SENSE %u -", current_sector, sptd.info.SenseInfoLength);
+		for (const auto& c : sptd.sense_buffer)
+			printf(" %02X", c);
+		putchar('\n');
 		return false;
-	};
-
-	// Try the whole range in a single command first. One command per sector makes the drive wait for
-	// each sector to come around again (audio tracks have no readahead on most drives), which caps
-	// throughput at roughly 1x and stalls CDDA playback.
-	if (count > 1 && read_range(sector, count, buffer, false))
-		return true;
-
-	// Fall back to reading sectors one by one: a single read spanning 2 tracks of different types fails.
-	for (u32 n = 0; n < count; ++n)
-	{
-		if (!read_range(sector + n, 1, buffer + 2352 * n, true))
-			return false;
 	}
 
 	return true;
