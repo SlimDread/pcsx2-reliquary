@@ -134,11 +134,17 @@ How to build with diagnostics: see [`PORTING.md`](PORTING.md#diagnostic-build).
 
 ## Not covered / known limits
 
-- **Open issue: PS1 discs and DVD-Video black-screen after booting from a physical drive** (tested
-  2026-10-28 with one PS1 disc, SCPS-10118, and DVD-Video discs). In the PS1 case the DIAG log shows
-  the first block (sectors 0–15) delivered without errors, after which the PS1 side stops requesting
-  data. The cause hasn't been determined. It may be existing PCSX2 PS1/DVD-player behaviour or
-  related to these changes; no baseline comparison has been done yet.
+- **Commercial DVD-Video isn't supported (CSS).** Movie DVDs are CSS-encrypted. A real PS2's drive
+  decrypts them for the BIOS DVD player; PCSX2 doesn't emulate that, and PC drives return the
+  encrypted sectors. The disc reads without errors and the player starts, but only the unencrypted
+  start of each sector decodes, so you see a strip of picture and the rest is garbage, or a black
+  screen. This is the same in official PCSX2 and isn't caused by these changes. Unencrypted
+  (home-made) DVD-Video should play. Some PC drives also stall on protected sectors, which can leave
+  PCSX2 unable to exit until the disc is ejected.
+- **Open issue: a PS1 disc black-screens after booting from a physical drive** (one disc tested,
+  SCPS-10118, 2026-10-28). The DIAG log shows the first block (sectors 0–15) delivered without errors,
+  after which the PS1 side stops requesting data. The cause hasn't been determined; no baseline
+  comparison against official PCSX2 has been done with this disc yet.
 - Loads still take as long as the drive needs. If the game must wait for data, you get a loading pause,
   as on real hardware. The difference is that the emulator keeps running.
 - Disc reads at boot and during disc hashing (`DoCDVDreadSector`: game list serial/CRC, ISO hashing)
