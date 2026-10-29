@@ -163,6 +163,11 @@ namespace PerformanceMetrics
 		if (!is_skipping_present)
 		{
 			const float frame_time = s_last_frame_time.GetTimeMillisecondsAndReset();
+#ifdef PCSX2_CDVD_DIAG
+			// Host-side hitch: the emulator itself took too long to produce a frame (not the game waiting on disc).
+			if (frame_time >= 25.0f && s_frame_number > 60)
+				Console.Warning("[FRAME-DIAG] Slow frame: %.1f ms (frame %llu)", frame_time, static_cast<unsigned long long>(s_frame_number));
+#endif
 			s_minimum_frame_time_accumulator = (s_minimum_frame_time_accumulator == 0.0f) ? frame_time : std::min(s_minimum_frame_time_accumulator, frame_time);
 			s_average_frame_time_accumulator += frame_time;
 			s_maximum_frame_time_accumulator = std::max(s_maximum_frame_time_accumulator, frame_time);

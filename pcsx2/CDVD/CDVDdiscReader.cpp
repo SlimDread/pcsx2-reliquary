@@ -305,12 +305,14 @@ static s32 DISCreadSubQ(u32 lsn, cdvdSubQ* subq)
 	// From my testing, the IOCTL returns 0 for ctrl. This also breaks
 	// the OSDSYS player. The only "safe" values to receive from the IOCTL
 	// are ADR, trackNum and trackIndex.
-	if (!src->ReadTrackSubQ(subq))
-	{
-		subq->adr = 1;
-		subq->trackNum = i;
-		subq->trackIndex = 1;
-	}
+	// Don't ask the drive for them, though: this runs on the emulation thread, and the CD player polls it
+	// constantly. While the IO thread has a read in flight the IOCTL waits behind it, freezing frames
+	// (seen as 50-165ms hitches while readahead filled at the start of CD audio). The drive's "current
+	// position" is also wherever readahead is, not where the game is reading, so derive the values
+	// from the TOC instead (same as the old fallback).
+	subq->adr = 1;
+	subq->trackNum = i;
+	subq->trackIndex = 1;
 
 	return 0;
 }

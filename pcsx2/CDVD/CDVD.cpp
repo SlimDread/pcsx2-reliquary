@@ -26,6 +26,7 @@
 #include "common/Path.h"
 #include "common/StringUtil.h"
 #include "common/Threading.h"
+#include "common/Timer.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1725,6 +1726,23 @@ __fi void cdvdReadInterrupt()
 		if (cdvd.ReadErr == 0 || cdvd.ReadErr == -2)
 		{
 			cdvd.ReadErr = DoCDVDgetBuffer(&cdr.Transfer[0]);
+#ifdef PCSX2_CDVD_DIAG
+			// Real time the emulated drive was held busy past its emulated timing, waiting on the host drive.
+			static Common::Timer::Value s_diag_wait_start = 0;
+			static u32 s_diag_polls = 0;
+			if (cdvd.ReadErr == -2)
+			{
+				if (s_diag_polls++ == 0)
+					s_diag_wait_start = Common::Timer::GetCurrentValue();
+			}
+			else if (s_diag_polls)
+			{
+				const double ms = Common::Timer::ConvertValueToMilliseconds(Common::Timer::GetCurrentValue() - s_diag_wait_start);
+				if (ms >= 2.0)
+					Console.Warning("[CDVD-DIAG] Waited %.1f ms on drive for sector %u (%u polls)", ms, cdvd.CurrentSector, s_diag_polls);
+				s_diag_polls = 0;
+			}
+#endif
 			if (cdvd.ReadErr == -2)
 			{
 				// Host read not finished yet. Rather than freezing the emulator until it lands,
@@ -1943,6 +1961,13 @@ static uint cdvdStartSeek(uint newsector, CDVD_MODE_TYPE mode, bool transition_t
 	}
 
 	seektime += drive_speed_change_cycles;
+
+#ifdef PCSX2_CDVD_DIAG
+	// Long seeks the game itself asks for. A real PS2 takes this time too, so stalls here are game-side loading.
+	if (isSeeking || drive_speed_change_cycles || seektime >= PSXCLK / 50)
+		Console.WriteLn("[CDVD-DIAG] Emulated seek %u -> %u (%u sectors): %.1f ms", cdvd.CurrentSector, newsector, delta,
+			static_cast<double>(seektime) * 1000.0 / static_cast<double>(PSXCLK));
+#endif
 
 	// Only do this on reads, the seek kind of accounts for this and then it reads the sectors after
 	if ((delta || cdvd.Action == cdvdAction_Seek) && !isSeeking && !cdvd.nextSectorsBuffered)

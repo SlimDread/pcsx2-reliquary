@@ -3,6 +3,7 @@
 
 #include "CDVDdiscReader.h"
 #include "CDVD/CDVD.h"
+#include "common/Console.h"
 
 #include <algorithm>
 #include <atomic>
@@ -277,10 +278,19 @@ static void cdvdThread()
 		if (keepalive || !cdvdCacheCheck(request_lsn))
 		{
 			touched_drive = true;
+#ifdef PCSX2_CDVD_DIAG
+			const auto diag_start = clock::now();
+#endif
 			if (cdvdReadBlockOfSectors(request_lsn, buffer))
 				cdvdCacheUpdate(request_lsn, buffer);
 			else
 				read_ok = false;
+#ifdef PCSX2_CDVD_DIAG
+			const double diag_ms = std::chrono::duration<double, std::milli>(clock::now() - diag_start).count();
+			if (diag_ms >= 30.0 || !read_ok)
+				Console.WriteLn("[CDVD-DIAG] Drive read of sector %u (%s) took %.1f ms%s", request_lsn,
+					handling_request ? "request" : (keepalive ? "keepalive" : "prefetch"), diag_ms, read_ok ? "" : " FAILED");
+#endif
 		}
 		guard.lock();
 

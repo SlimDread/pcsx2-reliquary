@@ -10,6 +10,7 @@
 #include "IopDma.h"
 
 #include "common/Threading.h"
+#include "common/Timer.h"
 
 //THIS ALL IS FOR THE CDROM REGISTERS HANDLING
 
@@ -564,6 +565,23 @@ void cdrReadInterrupt()
 	if (cdr.RErr == 0 || cdr.RErr == -2)
 	{
 		cdr.RErr = DoCDVDgetBuffer(cdr.Transfer);
+#ifdef PCSX2_CDVD_DIAG
+		// Real time the PS1 drive was held busy waiting on the host drive.
+		static Common::Timer::Value s_diag_wait_start = 0;
+		static u32 s_diag_polls = 0;
+		if (cdr.RErr == -2)
+		{
+			if (s_diag_polls++ == 0)
+				s_diag_wait_start = Common::Timer::GetCurrentValue();
+		}
+		else if (s_diag_polls)
+		{
+			const double ms = Common::Timer::ConvertValueToMilliseconds(Common::Timer::GetCurrentValue() - s_diag_wait_start);
+			if (ms >= 2.0)
+				Console.Warning("[CDVD-DIAG] PS1: waited %.1f ms on drive (%u polls)", ms, s_diag_polls);
+			s_diag_polls = 0;
+		}
+#endif
 		if (cdr.RErr == -2)
 		{
 			// Host drive hasn't delivered the sector yet. Instead of freezing the emulator until it does,
